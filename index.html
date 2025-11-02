@@ -8,9 +8,20 @@
     <link rel="icon" href="icon.png"> <!-- Assume you have an icon.png -->
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        .track { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        .track { 
+            /* Optional: Define a base width or other styles for your items */
+            padding: 10px;
+            border: 1px solid #ccc;
+            margin-bottom: 10px; 
+            }
         .track input, .track select { margin-right: 10px; }
-        #tracks { margin-bottom: 20px; }
+        #tracks { 
+            display: flex;
+            flex-wrap: wrap; /* Allows items to wrap to the next line */
+            justify-content: flex-start; /* Aligns items to the left */
+            gap: 10px; /* Optional: Adds space between items */
+            margin-bottom: 20px; 
+        }
         button { margin-right: 5px; }
     </style>
 </head>
