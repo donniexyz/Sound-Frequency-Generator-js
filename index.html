@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sound Frequency Generator PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.png"> <!-- Assume you have an icon.png -->
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .track { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        .track input, .track select { margin-right: 10px; }
+        #tracks { margin-bottom: 20px; }
+        button { margin-right: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Sound Frequency Generator</h1>
+    <button id="addTrack">Add Track</button>
+    <button id="playAll">Play All</button>
+    <button id="stopAll">Stop All</button>
+    <button id="save">Save Configuration</button>
+    <button id="load">Load Configuration</button>
+    <div id="tracks"></div>
+
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('Service Worker registered', reg))
+                    .catch(err => console.log('Service Worker registration failed', err));
+            });
+        }
+    </script>
+</body>
+</html>
