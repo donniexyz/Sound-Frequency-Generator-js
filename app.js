@@ -3,7 +3,7 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let tracks = [];
 let trackId = 0;
 
-function createTrack() {
+function createTrack(config = {}) {
     const track = {
         id: trackId++,
         oscillator: null,
@@ -22,7 +22,8 @@ function createTrack() {
         release: 0.1,
         filterType: 'lowpass', // lowpass, highpass, bandpass
         filterFreq: 1000,
-        filterQ: 1
+        filterQ: 1,
+        ...config
     };
 
     renderTrack(track);
@@ -37,7 +38,7 @@ function renderTrack(track) {
     trackDiv.innerHTML = `
         <h3>Track ${track.id + 1}</h3>
         Frequency: <input type="number" class="freq" value="${track.frequency}" min="20" max="20000"> Hz<br>
-        Waveform: <select class="wave">
+        Waveform: <select class="wave"> <!-- sine, square, sawtooth, triangle -->
             <option value="sine" ${track.waveform === 'sine' ? 'selected' : ''}>Sine</option>
             <option value="square" ${track.waveform === 'square' ? 'selected' : ''}>Square</option>
             <option value="sawtooth" ${track.waveform === 'sawtooth' ? 'selected' : ''}>Sawtooth</option>
@@ -51,15 +52,15 @@ function renderTrack(track) {
         Decay: <input type="number" class="decay" value="${track.decay}" min="0" step="0.01"> s<br>
         Sustain: <input type="range" class="sustain" min="0" max="1" step="0.01" value="${track.sustain}"><br>
         Release: <input type="number" class="release" value="${track.release}" min="0" step="0.01"> s<br>
-        Filter Type: <select class="filterType">
+        Filter Type: <select class="filterType"> <!-- lowpass, highpass, bandpass -->
             <option value="lowpass" ${track.filterType === 'lowpass' ? 'selected' : ''}>Lowpass</option>
             <option value="highpass" ${track.filterType === 'highpass' ? 'selected' : ''}>Highpass</option>
             <option value="bandpass" ${track.filterType === 'bandpass' ? 'selected' : ''}>Bandpass</option>
         </select><br>
         Filter Freq: <input type="number" class="filterFreq" value="${track.filterFreq}" min="20" max="20000"> Hz<br>
         Filter Q: <input type="number" class="filterQ" value="${track.filterQ}" min="0.001" max="100" step="0.001"><br>
-        <button class="play">Play</button>
-        <button class="stop">Stop</button>
+        <button class="play" ${track.isPlaying ? 'disabled' : ''}>Play</button>
+        <button class="stop" ${!track.isPlaying ? 'disabled' : ''}>Stop</button>
         <button class="remove">Remove</button>
     `;
 
@@ -104,6 +105,12 @@ function updateFilter(track) {
 function playTrack(track) {
     if (track.isPlaying) return;
 
+    const trackDiv = document.getElementById(`track-${track.id}`);
+    if (trackDiv) {
+        trackDiv.querySelector('.play').disabled = true;
+        trackDiv.querySelector('.stop').disabled = false;
+    }
+
     track.oscillator = audioCtx.createOscillator();
     track.oscillator.type = track.waveform;
     track.oscillator.frequency.value = track.frequency;
@@ -140,6 +147,11 @@ function playTrack(track) {
 function stopTrack(track) {
     if (!track.isPlaying) return;
 
+    const trackDiv = document.getElementById(`track-${track.id}`);
+    if (trackDiv) {
+        trackDiv.querySelector('.stop').disabled = true;
+    }
+
     // Apply release
     const now = audioCtx.currentTime;
     track.gainNode.gain.cancelScheduledValues(now);
@@ -153,6 +165,11 @@ function stopTrack(track) {
         track.gainNode.disconnect();
         track.pannerNode.disconnect();
         track.isPlaying = false;
+        
+        const currentTrackDiv = document.getElementById(`track-${track.id}`);
+        if (currentTrackDiv) {
+            currentTrackDiv.querySelector('.play').disabled = false;
+        }
     }, track.release * 1000);
 }
 
@@ -194,11 +211,7 @@ document.getElementById('load').addEventListener('click', () => {
         tracks = [];
         trackId = 0;
         configs.forEach(config => {
-            const track = createTrack();
-            Object.assign(track, config);
-            renderTrack(track); // Re-render to update UI
-            document.getElementById(`track-${track.id}`).remove(); // Remove and re-add with updates
-            renderTrack(track);
+            createTrack(config);
         });
         alert('Configuration loaded!');
     } else {
