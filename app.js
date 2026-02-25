@@ -3,6 +3,22 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let tracks = [];
 let trackId = 0;
 
+// Visualization variables
+const analyser = audioCtx.createAnalyser();
+analyser.fftSize = 2048;
+const bufferLength = analyser.frequencyBinCount;
+const dataArray = new Uint8Array(bufferLength);
+const canvas = document.getElementById('visualizer');
+const canvasCtx = canvas.getContext('2d');
+let vizType = 'waveform'; // 'waveform', 'frequency', 'off'
+let animationId;
+
+// Connect master output to analyser, then to destination
+// We need a master gain node to easily route everything through the analyser
+const masterGain = audioCtx.createGain();
+masterGain.connect(analyser);
+analyser.connect(audioCtx.destination);
+
 function createTrack(config = {}) {
     const track = {
         id: trackId++,
@@ -103,12 +119,11 @@ function updateFilter(track) {
 }
 
 function playTrack(track) {
-    // If already playing, just update parameters (which is handled by listeners)
-    // But if the user wants to re-trigger the envelope, they might click play again.
-    // However, the current logic disables the play button while playing.
-    // If we want to allow "re-triggering" or just ensure it's playing:
-    
     if (track.isPlaying) return;
+
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
 
     const trackDiv = document.getElementById(`track-${track.id}`);
     if (trackDiv) {
@@ -132,11 +147,11 @@ function playTrack(track) {
     track.filterNode.frequency.value = track.filterFreq;
     track.filterNode.Q.value = track.filterQ;
 
-    // Connect: osc -> filter -> gain -> panner -> destination
+    // Connect: osc -> filter -> gain -> panner -> masterGain (instead of destination)
     track.oscillator.connect(track.filterNode);
     track.filterNode.connect(track.gainNode);
     track.gainNode.connect(track.pannerNode);
-    track.pannerNode.connect(audioCtx.destination);
+    track.pannerNode.connect(masterGain); // Route to masterGain for visualization
 
     track.oscillator.start();
     track.isPlaying = true;
@@ -164,8 +179,6 @@ function stopTrack(track) {
     track.gainNode.gain.linearRampToValueAtTime(0, now + track.release);
 
     setTimeout(() => {
-        // Check if track is still playing (it might have been restarted?)
-        // In this simple implementation, we just stop.
         if (track.oscillator) {
             track.oscillator.stop();
             track.oscillator.disconnect();
@@ -192,6 +205,66 @@ function removeTrack(track) {
     tracks = tracks.filter(t => t.id !== track.id);
     document.getElementById(`track-${track.id}`).remove();
 }
+
+// Visualization Logic
+function draw() {
+    animationId = requestAnimationFrame(draw);
+
+    if (vizType === 'off') {
+        canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+    }
+
+    canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (vizType === 'waveform') {
+        analyser.getByteTimeDomainData(dataArray);
+        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeStyle = 'rgb(0, 255, 0)';
+        canvasCtx.beginPath();
+
+        const sliceWidth = canvas.width * 1.0 / bufferLength;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+            const v = dataArray[i] / 128.0;
+            const y = v * canvas.height / 2;
+
+            if (i === 0) {
+                canvasCtx.moveTo(x, y);
+            } else {
+                canvasCtx.lineTo(x, y);
+            }
+
+            x += sliceWidth;
+        }
+
+        canvasCtx.lineTo(canvas.width, canvas.height / 2);
+        canvasCtx.stroke();
+    } else if (vizType === 'frequency') {
+        analyser.getByteFrequencyData(dataArray);
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let barHeight;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+            barHeight = dataArray[i] / 2;
+
+            canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+            canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+            x += barWidth + 1;
+        }
+    }
+}
+
+document.getElementById('vizType').addEventListener('change', (e) => {
+    vizType = e.target.value;
+});
+
+// Start visualization loop
+draw();
 
 document.getElementById('addTrack').addEventListener('click', () => createTrack());
 document.getElementById('playAll').addEventListener('click', () => {
