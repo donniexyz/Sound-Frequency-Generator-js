@@ -103,6 +103,11 @@ function updateFilter(track) {
 }
 
 function playTrack(track) {
+    // If already playing, just update parameters (which is handled by listeners)
+    // But if the user wants to re-trigger the envelope, they might click play again.
+    // However, the current logic disables the play button while playing.
+    // If we want to allow "re-triggering" or just ensure it's playing:
+    
     if (track.isPlaying) return;
 
     const trackDiv = document.getElementById(`track-${track.id}`);
@@ -159,12 +164,21 @@ function stopTrack(track) {
     track.gainNode.gain.linearRampToValueAtTime(0, now + track.release);
 
     setTimeout(() => {
-        track.oscillator.stop();
-        track.oscillator.disconnect();
-        track.filterNode.disconnect();
-        track.gainNode.disconnect();
-        track.pannerNode.disconnect();
+        // Check if track is still playing (it might have been restarted?)
+        // In this simple implementation, we just stop.
+        if (track.oscillator) {
+            track.oscillator.stop();
+            track.oscillator.disconnect();
+        }
+        if (track.filterNode) track.filterNode.disconnect();
+        if (track.gainNode) track.gainNode.disconnect();
+        if (track.pannerNode) track.pannerNode.disconnect();
+        
         track.isPlaying = false;
+        track.oscillator = null;
+        track.gainNode = null;
+        track.pannerNode = null;
+        track.filterNode = null;
         
         const currentTrackDiv = document.getElementById(`track-${track.id}`);
         if (currentTrackDiv) {
@@ -179,8 +193,13 @@ function removeTrack(track) {
     document.getElementById(`track-${track.id}`).remove();
 }
 
-document.getElementById('addTrack').addEventListener('click', createTrack);
-document.getElementById('playAll').addEventListener('click', () => tracks.forEach(playTrack));
+document.getElementById('addTrack').addEventListener('click', () => createTrack());
+document.getElementById('playAll').addEventListener('click', () => {
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    tracks.forEach(playTrack);
+});
 document.getElementById('stopAll').addEventListener('click', () => tracks.forEach(stopTrack));
 
 document.getElementById('save').addEventListener('click', () => {
