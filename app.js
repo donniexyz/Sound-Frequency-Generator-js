@@ -17,6 +17,7 @@ let vizType = 'waveform'; // 'waveform', 'frequency', 'off'
 let vizScale = 1;
 let vizTimeScale = 1; // 1 = full buffer, >1 = zoomed in
 let showGrid = true;
+let isFrozen = false;
 let animationId;
 
 // Connect master output to analyser, then to destination
@@ -288,15 +289,23 @@ function draw() {
         return;
     }
 
+    // If frozen, we just redraw the existing dataArray (which isn't being updated)
+    // But we still need to clear and redraw in case settings (scale, grid) changed.
+    // If NOT frozen, we update dataArray.
+    if (!isFrozen) {
+        if (vizType === 'waveform') {
+            analyser.getByteTimeDomainData(dataArray);
+        } else if (vizType === 'frequency') {
+            analyser.getByteFrequencyData(dataArray);
+        }
+    }
+
     canvasCtx.fillStyle = 'rgb(0, 0, 0)';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
     drawGrid(vizType);
 
     if (vizType === 'waveform') {
-        // Use fftSize to get more data points for smoother wave
-        analyser.getByteTimeDomainData(dataArray);
-        
         canvasCtx.lineWidth = 2;
         canvasCtx.strokeStyle = 'rgb(0, 255, 0)';
         canvasCtx.beginPath();
@@ -326,9 +335,6 @@ function draw() {
         canvasCtx.stroke();
 
     } else if (vizType === 'frequency') {
-        // Frequency data is always half of fftSize
-        analyser.getByteFrequencyData(dataArray); // Fills first bufferLength (1024) entries
-        
         const width = canvas.width;
         const height = canvas.height;
         const minFreq = 20;
@@ -336,22 +342,12 @@ function draw() {
         const logMin = Math.log10(minFreq);
         const logMax = Math.log10(maxFreq);
         
-        // Draw using pixel-by-pixel approach for smooth log scale
-        // Or iterate over bins and map them. 
-        // Pixel approach ensures we fill the canvas without gaps.
-        
         canvasCtx.fillStyle = 'rgb(255, 50, 50)';
         
-        // Optimization: Iterate over pixels x, find corresponding freq, then bin.
         for (let x = 0; x < width; x++) {
-            // Calculate frequency for this x
-            // x / width = (logFreq - logMin) / (logMax - logMin)
-            // logFreq = (x / width) * (logMax - logMin) + logMin
             const logFreq = (x / width) * (logMax - logMin) + logMin;
             const freq = Math.pow(10, logFreq);
             
-            // Find bin index
-            // Bin 0 = 0Hz, Bin N = N * SampleRate / FFTSize
             const binIndex = Math.round(freq * analyser.fftSize / audioCtx.sampleRate);
             
             if (binIndex >= 0 && binIndex < bufferLength) {
@@ -373,6 +369,9 @@ document.getElementById('vizType').addEventListener('change', (e) => {
     } else {
         timeScaleGroup.style.display = 'none';
     }
+    // Unfreeze when changing type to avoid confusion
+    isFrozen = false;
+    document.getElementById('vizFreeze').textContent = 'Freeze';
 });
 
 document.getElementById('vizScale').addEventListener('input', (e) => {
@@ -385,6 +384,11 @@ document.getElementById('vizTimeScale').addEventListener('input', (e) => {
 
 document.getElementById('vizGrid').addEventListener('change', (e) => {
     showGrid = e.target.checked;
+});
+
+document.getElementById('vizFreeze').addEventListener('click', (e) => {
+    isFrozen = !isFrozen;
+    e.target.textContent = isFrozen ? 'Unfreeze' : 'Freeze';
 });
 
 // Initialize UI state
