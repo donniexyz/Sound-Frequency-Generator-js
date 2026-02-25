@@ -6,15 +6,20 @@ let trackId = 0;
 // Visualization variables
 const analyser = audioCtx.createAnalyser();
 analyser.fftSize = 2048;
-const bufferLength = analyser.frequencyBinCount;
-const dataArray = new Uint8Array(bufferLength);
+// We use fftSize for time domain to get more detail, but frequencyBinCount (half fftSize) for frequency data.
+// To keep it simple and consistent with previous code, we'll use a buffer large enough for the FFT size for waveform,
+// but we only need half for frequency.
+const bufferLength = analyser.frequencyBinCount; // 1024
+const dataArray = new Uint8Array(analyser.fftSize); // Use larger buffer to accommodate full waveform if needed
 const canvas = document.getElementById('visualizer');
 const canvasCtx = canvas.getContext('2d');
 let vizType = 'waveform'; // 'waveform', 'frequency', 'off'
+let vizScale = 1;
+let vizTimeScale = 1; // 1 = full buffer, >1 = zoomed in
+let showGrid = true;
 let animationId;
 
 // Connect master output to analyser, then to destination
-// We need a master gain node to easily route everything through the analyser
 const masterGain = audioCtx.createGain();
 masterGain.connect(analyser);
 analyser.connect(audioCtx.destination);
@@ -147,11 +152,11 @@ function playTrack(track) {
     track.filterNode.frequency.value = track.filterFreq;
     track.filterNode.Q.value = track.filterQ;
 
-    // Connect: osc -> filter -> gain -> panner -> masterGain (instead of destination)
+    // Connect: osc -> filter -> gain -> panner -> masterGain
     track.oscillator.connect(track.filterNode);
     track.filterNode.connect(track.gainNode);
     track.gainNode.connect(track.pannerNode);
-    track.pannerNode.connect(masterGain); // Route to masterGain for visualization
+    track.pannerNode.connect(masterGain);
 
     track.oscillator.start();
     track.isPlaying = true;
@@ -207,6 +212,74 @@ function removeTrack(track) {
 }
 
 // Visualization Logic
+function drawGrid(type) {
+    if (!showGrid) return;
+
+    canvasCtx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+    canvasCtx.lineWidth = 1;
+    canvasCtx.fillStyle = 'rgba(200, 200, 200, 0.8)';
+    canvasCtx.font = '10px Arial';
+    canvasCtx.textAlign = 'center';
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    if (type === 'frequency') {
+        // Logarithmic Grid
+        const minFreq = 20;
+        const maxFreq = audioCtx.sampleRate / 2;
+        const logMin = Math.log10(minFreq);
+        const logMax = Math.log10(maxFreq);
+
+        const getX = (freq) => {
+            const logFreq = Math.log10(freq);
+            return ((logFreq - logMin) / (logMax - logMin)) * width;
+        };
+
+        // Draw decades (100, 1k, 10k) and some intermediate values
+        const freqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+        freqs.forEach(freq => {
+            const x = getX(freq);
+            if (x >= 0 && x <= width) {
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(x, 0);
+                canvasCtx.lineTo(x, height);
+                canvasCtx.stroke();
+                
+                let label = freq >= 1000 ? (freq/1000) + 'k' : freq;
+                canvasCtx.fillText(label, x, height - 5);
+            }
+        });
+    } else if (type === 'waveform') {
+        // Time Grid
+        // We are displaying 'analyser.fftSize' samples (or bufferLength if we used that)
+        // Let's use fftSize for the full window duration
+        const duration = (analyser.fftSize / audioCtx.sampleRate) / vizTimeScale; // seconds
+        const msDuration = duration * 1000;
+        
+        // Draw lines every 10ms (or adjust based on zoom)
+        // If zoomed in, we might want finer grid
+        let step = 10;
+        if (vizTimeScale > 2) step = 5;
+        if (vizTimeScale > 5) step = 1;
+
+        for (let t = 0; t < msDuration; t += step) {
+            const x = (t / msDuration) * width;
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(x, 0);
+            canvasCtx.lineTo(x, height);
+            canvasCtx.stroke();
+            canvasCtx.fillText(Math.round(t) + 'ms', x, height - 5);
+        }
+        
+        // Amplitude Grid (Horizontal)
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(0, height/2);
+        canvasCtx.lineTo(width, height/2);
+        canvasCtx.stroke();
+    }
+}
+
 function draw() {
     animationId = requestAnimationFrame(draw);
 
@@ -218,18 +291,28 @@ function draw() {
     canvasCtx.fillStyle = 'rgb(0, 0, 0)';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
+    drawGrid(vizType);
+
     if (vizType === 'waveform') {
+        // Use fftSize to get more data points for smoother wave
         analyser.getByteTimeDomainData(dataArray);
+        
         canvasCtx.lineWidth = 2;
         canvasCtx.strokeStyle = 'rgb(0, 255, 0)';
         canvasCtx.beginPath();
 
-        const sliceWidth = canvas.width * 1.0 / bufferLength;
+        // We want to display the full buffer (fftSize)
+        // If vizTimeScale > 1, we only display a portion of the buffer
+        const displayLength = Math.floor(analyser.fftSize / vizTimeScale);
+        const sliceWidth = canvas.width * 1.0 / displayLength;
         let x = 0;
 
-        for (let i = 0; i < bufferLength; i++) {
-            const v = dataArray[i] / 128.0;
-            const y = v * canvas.height / 2;
+        for (let i = 0; i < displayLength; i++) {
+            let v = dataArray[i];
+            let centered = v - 128;
+            centered = centered * vizScale;
+            
+            const y = (centered + 128) / 255.0 * canvas.height;
 
             if (i === 0) {
                 canvasCtx.moveTo(x, y);
@@ -240,28 +323,72 @@ function draw() {
             x += sliceWidth;
         }
 
-        canvasCtx.lineTo(canvas.width, canvas.height / 2);
         canvasCtx.stroke();
+
     } else if (vizType === 'frequency') {
-        analyser.getByteFrequencyData(dataArray);
-        const barWidth = (canvas.width / bufferLength) * 2.5;
-        let barHeight;
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-            barHeight = dataArray[i] / 2;
-
-            canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
-            canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-
-            x += barWidth + 1;
+        // Frequency data is always half of fftSize
+        analyser.getByteFrequencyData(dataArray); // Fills first bufferLength (1024) entries
+        
+        const width = canvas.width;
+        const height = canvas.height;
+        const minFreq = 20;
+        const maxFreq = audioCtx.sampleRate / 2;
+        const logMin = Math.log10(minFreq);
+        const logMax = Math.log10(maxFreq);
+        
+        // Draw using pixel-by-pixel approach for smooth log scale
+        // Or iterate over bins and map them. 
+        // Pixel approach ensures we fill the canvas without gaps.
+        
+        canvasCtx.fillStyle = 'rgb(255, 50, 50)';
+        
+        // Optimization: Iterate over pixels x, find corresponding freq, then bin.
+        for (let x = 0; x < width; x++) {
+            // Calculate frequency for this x
+            // x / width = (logFreq - logMin) / (logMax - logMin)
+            // logFreq = (x / width) * (logMax - logMin) + logMin
+            const logFreq = (x / width) * (logMax - logMin) + logMin;
+            const freq = Math.pow(10, logFreq);
+            
+            // Find bin index
+            // Bin 0 = 0Hz, Bin N = N * SampleRate / FFTSize
+            const binIndex = Math.round(freq * analyser.fftSize / audioCtx.sampleRate);
+            
+            if (binIndex >= 0 && binIndex < bufferLength) {
+                const value = dataArray[binIndex];
+                const barHeight = (value * vizScale) / 255 * height;
+                
+                canvasCtx.fillRect(x, height - barHeight, 1, barHeight);
+            }
         }
     }
 }
 
 document.getElementById('vizType').addEventListener('change', (e) => {
     vizType = e.target.value;
+    // Show/Hide Time Scale control based on type
+    const timeScaleGroup = document.getElementById('timeScaleGroup');
+    if (vizType === 'waveform') {
+        timeScaleGroup.style.display = 'flex';
+    } else {
+        timeScaleGroup.style.display = 'none';
+    }
 });
+
+document.getElementById('vizScale').addEventListener('input', (e) => {
+    vizScale = parseFloat(e.target.value);
+});
+
+document.getElementById('vizTimeScale').addEventListener('input', (e) => {
+    vizTimeScale = parseFloat(e.target.value);
+});
+
+document.getElementById('vizGrid').addEventListener('change', (e) => {
+    showGrid = e.target.checked;
+});
+
+// Initialize UI state
+document.getElementById('vizType').dispatchEvent(new Event('change'));
 
 // Start visualization loop
 draw();

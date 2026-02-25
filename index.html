@@ -44,7 +44,7 @@
             border: 1px solid #333;
             background-color: #000;
             width: 100%;
-            height: 150px;
+            height: 200px; /* Increased height for better visibility */
             position: relative;
         }
         canvas {
@@ -54,6 +54,17 @@
         }
         #vizControls {
             margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        #vizControls label {
+            margin-right: 5px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
         }
     </style>
 </head>
@@ -61,12 +72,26 @@
     <h1>Sound Frequency Generator</h1>
 
     <div id="vizControls">
-        <label for="vizType">Visualization:</label>
-        <select id="vizType">
-            <option value="waveform">Waveform</option>
-            <option value="frequency">Frequency Bars</option>
-            <option value="off">Off</option>
-        </select>
+        <div class="control-group">
+            <label for="vizType">Visualization:</label>
+            <select id="vizType">
+                <option value="waveform">Waveform</option>
+                <option value="frequency">Frequency Bars</option>
+                <option value="off">Off</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="vizScale">Amplitude Scale:</label>
+            <input type="range" id="vizScale" min="0.1" max="5" step="0.1" value="1">
+        </div>
+        <div class="control-group" id="timeScaleGroup">
+            <label for="vizTimeScale">Time Scale:</label>
+            <input type="range" id="vizTimeScale" min="1" max="10" step="1" value="1">
+        </div>
+        <div class="control-group">
+            <label for="vizGrid">Show Grid:</label>
+            <input type="checkbox" id="vizGrid" checked>
+        </div>
     </div>
     <div id="visualizer-container">
         <canvas id="visualizer"></canvas>
