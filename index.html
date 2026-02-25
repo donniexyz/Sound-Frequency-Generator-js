@@ -23,6 +23,22 @@
             margin-bottom: 20px; 
         }
         button { margin-right: 5px; }
+        #explanation {
+            margin-top: 20px;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+            display: none;
+        }
+        #toggleExplanation {
+            margin-top: 20px;
+            cursor: pointer;
+            color: blue;
+            text-decoration: underline;
+            background: none;
+            border: none;
+            padding: 0;
+            font: inherit;
+        }
     </style>
 </head>
 <body>
@@ -34,6 +50,39 @@
     <button id="load">Load Configuration</button>
     <div id="tracks"></div>
 
+    <button id="toggleExplanation">Show Explanation of Controls</button>
+    <div id="explanation">
+        <h3>Control Explanations</h3>
+        <ul>
+            <li><strong>Frequency:</strong> The pitch of the sound in Hertz (Hz). Higher values mean higher pitch.</li>
+            <li><strong>Waveform:</strong> The shape of the sound wave.
+                <ul>
+                    <li><em>Sine:</em> Smooth, pure tone.</li>
+                    <li><em>Square:</em> Harsh, buzzy tone.</li>
+                    <li><em>Sawtooth:</em> Sharp, biting tone.</li>
+                    <li><em>Triangle:</em> Mellow, flute-like tone.</li>
+                </ul>
+            </li>
+            <li><strong>Volume:</strong> The loudness of the track.</li>
+            <li><strong>Pan:</strong> Stereo positioning. -1 is full left, 1 is full right, 0 is center.</li>
+            <li><strong>Detune:</strong> Fine-tunes the frequency in cents (100 cents = 1 semitone). Creates a chorus effect when used with multiple tracks.</li>
+            <li><strong>Mute:</strong> Silences the track without stopping it.</li>
+            <li><strong>Attack:</strong> Time taken for the sound to reach full volume after starting.</li>
+            <li><strong>Decay:</strong> Time taken for the sound to drop from full volume to the sustain level.</li>
+            <li><strong>Sustain:</strong> The volume level held while the sound is playing (after attack and decay).</li>
+            <li><strong>Release:</strong> Time taken for the sound to fade out after stopping.</li>
+            <li><strong>Filter Type:</strong> Determines which frequencies are allowed to pass through.
+                <ul>
+                    <li><em>Lowpass:</em> Allows low frequencies, cuts high ones (muffles sound).</li>
+                    <li><em>Highpass:</em> Allows high frequencies, cuts low ones (thins sound).</li>
+                    <li><em>Bandpass:</em> Allows a specific range of frequencies (nasal sound).</li>
+                </ul>
+            </li>
+            <li><strong>Filter Freq:</strong> The cutoff frequency for the filter.</li>
+            <li><strong>Filter Q:</strong> Resonance or "sharpness" of the filter peak. Higher values emphasize the cutoff frequency.</li>
+        </ul>
+    </div>
+
     <script src="app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
@@ -43,6 +92,19 @@
                     .catch(err => console.log('Service Worker registration failed', err));
             });
         }
+
+        const toggleBtn = document.getElementById('toggleExplanation');
+        const explanationDiv = document.getElementById('explanation');
+
+        toggleBtn.addEventListener('click', () => {
+            if (explanationDiv.style.display === 'none' || explanationDiv.style.display === '') {
+                explanationDiv.style.display = 'block';
+                toggleBtn.textContent = 'Hide Explanation of Controls';
+            } else {
+                explanationDiv.style.display = 'none';
+                toggleBtn.textContent = 'Show Explanation of Controls';
+            }
+        });
     </script>
 </body>
 </html>
